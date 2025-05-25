@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { db } from '../lib/supabase'
+import { auth, db, supabase } from '../lib/supabase'
 import { Modal } from '../components/Modal'
 
 interface SpendingLocation {
@@ -60,18 +60,28 @@ export function SignUpPage() {
     setError(null)
 
     try {
-      // Create user in the database
+      // First, create the auth user
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+      })
+
+      if (authError) throw authError
+      if (!authData.user) throw new Error('Failed to create auth user')
+
+      // Then create the user in our database
       const userData = {
+        id: authData.user.id, // Use the auth user's ID
         email: formData.email,
         first_name: formData.firstName,
         last_name: formData.lastName,
         bank: formData.bank,
         current_balance: parseFloat(formData.currentBalance),
         address: formData.address,
-        password: formData.password // Include password in user data
+        password: formData.password // Note: In production, we should remove this as it's handled by auth
       }
 
-      // Create user and get the response with the generated id
+      // Create user in our database
       const newUser = await db.users.create(userData)
 
       if (!newUser?.id) {
@@ -91,7 +101,7 @@ export function SignUpPage() {
 
       await Promise.all(spendingLocationPromises)
 
-      // Show success modal instead of navigating immediately
+      // Show success modal
       setShowSuccessModal(true)
     } catch (err) {
       console.error('Signup error:', err)
@@ -103,7 +113,7 @@ export function SignUpPage() {
 
   const handleSuccessModalClose = () => {
     setShowSuccessModal(false)
-    navigate({ to: '/' })
+    navigate({ to: '/dashboard' })
   }
 
   const handleSpendingLocationChange = (index: number, field: keyof SpendingLocation, value: string) => {
@@ -121,7 +131,7 @@ export function SignUpPage() {
       <Modal
         isOpen={showSuccessModal}
         onClose={handleSuccessModalClose}
-        title="Welcome to Map Engine!"
+        title="Welcome to BUSTER!"
         showCloseButton={false}
       >
         <div className="text-center">
@@ -144,8 +154,8 @@ export function SignUpPage() {
 
       <div className="max-w-3xl mx-auto">
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-light text-gray-900 mb-4">
-            Welcome to Map Engine
+          <h1 className="text-4xl font-light text-gray-900 mb-4 font-mono tracking-wider">
+            Welcome to BUSTER
           </h1>
           <p className="text-lg text-gray-600">
             Let's get started with your financial journey

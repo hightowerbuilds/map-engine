@@ -25,13 +25,42 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 })
 
+// Auth helper functions
+export const auth = {
+  signIn: async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    })
+    if (error) throw error
+    return data
+  },
+
+  signOut: async () => {
+    const { error } = await supabase.auth.signOut()
+    if (error) throw error
+  },
+
+  getSession: async () => {
+    const { data: { session }, error } = await supabase.auth.getSession()
+    if (error) throw error
+    return session
+  },
+
+  getCurrentUser: async () => {
+    const { data: { user }, error } = await supabase.auth.getUser()
+    if (error) throw error
+    return user
+  }
+}
+
 // Type definitions for our database tables
 export type Database = {
   public: {
     Tables: {
       users: {
         Row: {
-          id: string
+          id: string // This will be the same as the auth user's ID
           created_at: string
           email: string
           first_name: string
@@ -39,10 +68,10 @@ export type Database = {
           bank: string
           current_balance: number
           address: string
-          password: string
+          password: string // Note: In production, we should remove this as it's handled by auth
         }
         Insert: {
-          id?: string
+          id: string // Make id required for insert
           created_at?: string
           email: string
           first_name: string
@@ -87,6 +116,32 @@ export type Database = {
           category?: string
         }
       }
+      spending_amounts: {
+        Row: {
+          id: string
+          created_at: string
+          spending_location_id: string
+          amount: number
+          date: string
+          description: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          spending_location_id: string
+          amount: number
+          date?: string
+          description?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          spending_location_id?: string
+          amount?: number
+          date?: string
+          description?: string | null
+        }
+      }
     }
   }
 }
@@ -95,13 +150,10 @@ export type Database = {
 export const db = {
   // User operations
   users: {
-    create: async (userData: Omit<Database['public']['Tables']['users']['Insert'], 'id' | 'created_at'>) => {
+    create: async (userData: Database['public']['Tables']['users']['Insert']) => {
       const { data, error } = await supabase
         .from('users')
-        .insert({
-          ...userData,
-          // Let Supabase handle id and created_at
-        })
+        .insert(userData)
         .select()
         .single()
       
@@ -114,6 +166,17 @@ export const db = {
         .from('users')
         .select()
         .eq('id', id)
+        .single()
+      
+      if (error) throw error
+      return data
+    },
+    
+    findByEmail: async (email: string) => {
+      const { data, error } = await supabase
+        .from('users')
+        .select()
+        .eq('email', email)
         .single()
       
       if (error) throw error
@@ -166,6 +229,61 @@ export const db = {
       
       if (error) throw error
       return data
+    }
+  },
+  
+  spendingAmounts: {
+    create: async (amountData: Database['public']['Tables']['spending_amounts']['Insert']) => {
+      const { data, error } = await supabase
+        .from('spending_amounts')
+        .insert(amountData)
+        .select()
+        .single()
+      
+      if (error) throw error
+      return data
+    },
+    
+    getByLocationId: async (locationId: string) => {
+      const { data, error } = await supabase
+        .from('spending_amounts')
+        .select()
+        .eq('spending_location_id', locationId)
+        .order('date', { ascending: false })
+      
+      if (error) throw error
+      return data
+    },
+    
+    getTotalByLocationId: async (locationId: string) => {
+      const { data, error } = await supabase
+        .from('spending_amounts')
+        .select('amount')
+        .eq('spending_location_id', locationId)
+      
+      if (error) throw error
+      return data.reduce((sum, record) => sum + record.amount, 0)
+    },
+    
+    update: async (id: string, updates: Database['public']['Tables']['spending_amounts']['Update']) => {
+      const { data, error } = await supabase
+        .from('spending_amounts')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single()
+      
+      if (error) throw error
+      return data
+    },
+    
+    delete: async (id: string) => {
+      const { error } = await supabase
+        .from('spending_amounts')
+        .delete()
+        .eq('id', id)
+      
+      if (error) throw error
     }
   }
 } 

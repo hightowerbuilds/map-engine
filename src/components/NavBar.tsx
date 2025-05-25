@@ -46,30 +46,26 @@ export function NavBar() {
           textDecoration: 'none',
           color: '#333',
           fontSize: '1.5rem',
-          fontWeight: 'bold'
+          fontWeight: 'bold',
+          fontFamily: 'monospace',
+          letterSpacing: '0.1em'
         }}
       >
-        Map Engine
+        BUSTER
       </Link>
 
       <div style={linkContainerStyle}>
         <Link
-          to="/"
-          style={linkStyle(isActive('/'))}
+          to="/dashboard"
+          style={linkStyle(isActive('/dashboard'))}
         >
-          Home
+          Dashboard
         </Link>
         <Link
           to="/neighborhood"
           style={linkStyle(isActive('/neighborhood'))}
         >
           Neighborhood
-        </Link>
-        <Link
-          to="/banking"
-          style={linkStyle(isActive('/banking'))}
-        >
-          Banking
         </Link>
       </div>
     </nav>

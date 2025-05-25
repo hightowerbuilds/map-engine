@@ -1,9 +1,25 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { ContactShadows, Environment, OrbitControls, useGLTF } from '@react-three/drei'
+import { ContactShadows, Environment, OrbitControls } from '@react-three/drei'
+import { db } from '../lib/supabase'
 import { BuildingModal } from '../features/BuildingModal'
 import type { BuildingInfo } from '../features/BuildingModal'
 import type * as THREE from 'three'
+
+type Building = {
+  id: string
+  name: string
+  category: string
+  position: [number, number, number]
+  size: [number, number, number]
+  color: string
+  totalSpent: number
+}
+
+interface NeighborhoodSceneProps {
+  buildings: Array<Building>
+  onBuildingClick: (info: BuildingInfo) => void
+}
 
 // Building component that can be clicked
 function Building({ position, size, color, onClick, name, type }: { 
@@ -38,11 +54,11 @@ function Building({ position, size, color, onClick, name, type }: {
 // Ground plane component with border
 function Ground() {
   const groundSize = 20
-  const borderWidth = 0.1  // Width of the border
+  const borderWidth = 0.1
 
   return (
     <>
-      {/* Black border (slightly larger plane underneath) */}
+      {/* Black border */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.001, 0]}>
         <planeGeometry args={[groundSize + borderWidth * 2, groundSize + borderWidth * 2]} />
         <meshStandardMaterial color="#000000" />
@@ -57,65 +73,13 @@ function Ground() {
 }
 
 // Main scene component
-function Scene({ onBuildingClick }: { onBuildingClick: (info: BuildingInfo) => void }) {
+function Scene({ buildings, onBuildingClick }: NeighborhoodSceneProps) {
   const { camera } = useThree()
   
-  // Set up initial camera position for airplane-like view
-  camera.position.set(0, 500, 0)
+  // Set up initial camera position with steeper angle
+  camera.position.set(0, 150, 0)
   camera.lookAt(0, 0, 0)
-  camera.rotation.x = -Math.PI / 2
-
-  // Example buildings data with enhanced information
-  const buildings = [
-    { 
-      position: [-5, 0.05, -5], 
-      size: [0.1, 0.2, 0.1], 
-      color: '#4a90e2', 
-      name: 'Starbucks', 
-      type: 'Coffee Shop',
-      description: 'Popular coffee chain known for its signature drinks and cozy atmosphere.',
-      hours: 'Mon-Fri: 5:30 AM - 9:00 PM, Sat-Sun: 6:00 AM - 8:00 PM',
-      address: '123 Coffee Lane, Downtown',
-      rating: 4.5,
-      features: ['Free WiFi', 'Drive-thru', 'Mobile Order', 'Outdoor Seating']
-    },
-    { 
-      position: [5, 0.1, -3], 
-      size: [0.15, 0.3, 0.15], 
-      color: '#50c878', 
-      name: 'Olive Garden', 
-      type: 'Restaurant',
-      description: 'Italian restaurant chain offering pasta dishes, salads, and unlimited breadsticks.',
-      hours: 'Sun-Thu: 11:00 AM - 10:00 PM, Fri-Sat: 11:00 AM - 11:00 PM',
-      address: '456 Pasta Street, Downtown',
-      rating: 4.2,
-      features: ['Reservations', 'Takeout', 'Full Bar', 'Family Style']
-    },
-    { 
-      position: [0, 0.075, 5], 
-      size: [0.2, 0.25, 0.2], 
-      color: '#e2a84a', 
-      name: 'Whole Foods', 
-      type: 'Grocery Store',
-      description: 'Organic and natural foods supermarket with a wide selection of fresh produce.',
-      hours: 'Daily: 7:00 AM - 10:00 PM',
-      address: '789 Organic Avenue, Downtown',
-      rating: 4.7,
-      features: ['Organic', 'Bulk Foods', 'Hot Bar', 'Parking']
-    },
-    { 
-      position: [-8, 0.05, 2], 
-      size: [0.1, 0.15, 0.1], 
-      color: '#e24a4a', 
-      name: 'Chase Bank', 
-      type: 'Bank',
-      description: 'Full-service bank offering personal and business banking solutions.',
-      hours: 'Mon-Fri: 9:00 AM - 5:00 PM, Sat: 9:00 AM - 1:00 PM',
-      address: '321 Finance Road, Downtown',
-      rating: 4.0,
-      features: ['ATM', 'Drive-thru', '24/7 Online Banking', 'Safe Deposit Boxes']
-    },
-  ]
+  camera.rotation.x = -Math.PI / 2.2
 
   return (
     <>
@@ -127,15 +91,22 @@ function Scene({ onBuildingClick }: { onBuildingClick: (info: BuildingInfo) => v
         shadow-mapSize={[1024, 1024]}
       />
       <Ground />
-      {buildings.map((building, index) => (
+      {buildings.map((building) => (
         <Building
-          key={index}
-          position={building.position as [number, number, number]}
-          size={building.size as [number, number, number]}
+          key={building.id}
+          position={building.position}
+          size={building.size}
           color={building.color}
-          onClick={() => onBuildingClick(building)}
+          onClick={() => onBuildingClick({
+            name: building.name,
+            type: building.category,
+            description: `Total Spent: $${building.totalSpent.toLocaleString()}`,
+            hours: 'Hours not available',
+            address: 'Address not available',
+            features: []
+          })}
           name={building.name}
-          type={building.type}
+          type={building.category}
         />
       ))}
       <ContactShadows
@@ -152,22 +123,27 @@ function Scene({ onBuildingClick }: { onBuildingClick: (info: BuildingInfo) => v
         enableZoom={true}
         enableRotate={true}
         minDistance={2}
-        maxDistance={25}
-        maxPolarAngle={Math.PI / 2.5}
-        minPolarAngle={Math.PI / 2.1}
+        maxDistance={125}
+        maxPolarAngle={Math.PI / 2.2}
+        minPolarAngle={Math.PI / 2.3}
       />
     </>
   )
 }
 
 // Main component that wraps the Canvas
-export default function NeighborhoodScene() {
+export default function NeighborhoodScene({ buildings, onBuildingClick }: NeighborhoodSceneProps) {
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingInfo | null>(null)
+
+  const handleBuildingClick = (info: BuildingInfo) => {
+    setSelectedBuilding(info)
+    onBuildingClick(info)
+  }
 
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
-      <Canvas shadows camera={{ position: [0, 50, 0], fov: 50 }}>
-        <Scene onBuildingClick={setSelectedBuilding} />
+      <Canvas shadows camera={{ position: [0, 150, 0], fov: 50 }}>
+        <Scene buildings={buildings} onBuildingClick={handleBuildingClick} />
         <Environment preset="city" />
       </Canvas>
       <BuildingModal 

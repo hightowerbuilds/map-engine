@@ -3,6 +3,7 @@ import { HomePage } from './pages/HomePage'
 import { NeighborhoodPage } from './pages/NeighborhoodPage'
 import { SignUpPage } from './pages/SignUpPage'
 import { DashboardPage } from './pages/DashboardPage'
+import { UploadPage } from './pages/UploadPage'
 
 // Create the root route
 const rootRoute = createRootRoute()
@@ -32,12 +33,19 @@ const dashboardRoute = createRoute({
   component: DashboardPage,
 })
 
+const uploadRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/upload',
+  component: UploadPage,
+})
+
 // Create the route tree
 const routeTree = rootRoute.addChildren([
   indexRoute,
   neighborhoodRoute,
   signupRoute,
   dashboardRoute,
+  uploadRoute,
 ])
 
 // Create and export the router

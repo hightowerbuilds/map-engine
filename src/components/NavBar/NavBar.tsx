@@ -1,4 +1,3 @@
-import React from 'react'
 import { Link } from '@tanstack/react-router'
 import './styles.css'
 
@@ -14,6 +13,9 @@ export function NavBar() {
         </Link>
         <Link to="/dashboard" className="navbar-item">
           Dashboard
+        </Link>
+        <Link to="/upload" className="navbar-item">
+          Upload
         </Link>
       </div>
     </nav>

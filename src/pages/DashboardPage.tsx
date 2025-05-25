@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Layout } from '../components/Layout'
 import { EditLocationModal } from '../components/EditLocationModal'
@@ -9,7 +9,6 @@ import type { Database } from '../lib/supabase'
 
 type User = Database['public']['Tables']['users']['Row']
 type SpendingLocation = Database['public']['Tables']['spending_locations']['Row']
-type SpendingAmount = Database['public']['Tables']['spending_amounts']['Row']
 
 interface LocationWithTotal extends SpendingLocation {
   totalSpent: number
@@ -19,7 +18,6 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const { user: authUser, loading: authLoading, session } = useAuth()
   const [user, setUser] = useState<User | null>(null)
-  const [spendingLocations, setSpendingLocations] = useState<Array<SpendingLocation>>([])
   const [locationsWithTotals, setLocationsWithTotals] = useState<Array<LocationWithTotal>>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -58,7 +56,7 @@ export function DashboardPage() {
       console.log('Dashboard: Fetched totals:', Object.fromEntries(totals))
       
       // Combine locations with their totals
-      const locationsWithTotals = locations.map(location => {
+      const locationsWithTotalsData = locations.map(location => {
         const total = totals.get(location.id) || 0
         console.log(`Dashboard: Location ${location.id} (${location.name}) total:`, total)
         return {
@@ -67,9 +65,8 @@ export function DashboardPage() {
         }
       })
       
-      console.log('Dashboard: Combined locations with totals:', locationsWithTotals)
-      setSpendingLocations(locationsWithTotals)
-      setLocationsWithTotals(locationsWithTotals)
+      console.log('Dashboard: Combined locations with totals:', locationsWithTotalsData)
+      setLocationsWithTotals(locationsWithTotalsData)
     } catch (err) {
       console.error('Error fetching locations:', err)
       setError(err instanceof Error ? err.message : 'Failed to load locations')
@@ -124,14 +121,7 @@ export function DashboardPage() {
     try {
       const updated = await db.spendingLocations.update(updatedLocation.id, updatedLocation)
       
-      // Update both states
-      setSpendingLocations(locations => 
-        locations.map(loc => 
-          loc.id === updated.id ? updated : loc
-        )
-      )
-
-      // Refresh the total for this location
+      // Update locationsWithTotals
       const total = await db.spendingAmounts.getTotalByLocationId(updated.id)
       setLocationsWithTotals(locations => 
         locations.map(loc => 
@@ -146,9 +136,6 @@ export function DashboardPage() {
 
   const handleAddLocation = async (newLocation: SpendingLocation) => {
     try {
-      // Add the new location to both states
-      setSpendingLocations(locations => [...locations, newLocation])
-      
       // Add to locationsWithTotals with 0 total spent
       setLocationsWithTotals(locations => [...locations, { ...newLocation, totalSpent: 0 }])
     } catch (err) {

@@ -16,42 +16,55 @@ interface LocationWithTotal extends SpendingLocation {
 }
 
 // Base building dimensions [width, height, depth] for Three.js box geometry
-const BASE_BUILDING_SIZE: [number, number, number] = [0.25, 1.65, 0.25] // [width, height, depth]
+const BASE_BUILDING_SIZE: [number, number, number] = [1.0, 1.65, 1.0] // [width, height, depth] - width and depth increased from 0.25 to 1.0
 const HEIGHT_PER_DOLLAR = BASE_BUILDING_SIZE[1] / 10 // 0.165 units per dollar
 
 // Helper function to generate a position for a building
 function generatePosition(index: number, total: number, buildingHeight: number): [number, number, number] {
-  // Create a grid-like pattern
-  const gridSize = Math.ceil(Math.sqrt(total))
-  const row = Math.floor(index / gridSize)
-  const col = index % gridSize
-  
-  // Calculate position with some spacing
-  const spacing = 3
-  const x = (col - gridSize / 2) * spacing
-  const z = (row - gridSize / 2) * spacing
+  // Calculate position in a single row
+  const spacing = 3 // Space between buildings
+  const x = (index - (total - 1) / 2) * spacing // Center the row around x=0
+  const z = 0 // All buildings in the same z-plane
   
   // Position buildings on the ground by setting Y to half their height
-  // This ensures the bottom of the building is at ground level (y=0)
   const y = buildingHeight / 2
   
   return [x, y, z]
 }
 
-// Helper function to generate a color based on category
-function getColorForCategory(category: string): string {
-  const colors: { [key: string]: string } = {
-    'Restaurant': '#e24a4a',
-    'Retail': '#4a90e2',
-    'Entertainment': '#e2a84a',
-    'Services': '#50c878',
-    'Transportation': '#9b4ae2',
-    'Healthcare': '#e24a9b',
-    'Education': '#4ae2d9',
-    'Other': '#808080'
-  }
-  
-  return colors[category] || '#808080'
+// Generate a bright, unique color for each building
+function generateBrightColor(index: number): string {
+  // Array of bright, vibrant colors
+  const brightColors = [
+    '#FF6B6B', // Bright red
+    '#4ECDC4', // Turquoise
+    '#FFD93D', // Bright yellow
+    '#95E1D3', // Mint
+    '#FF8B94', // Coral
+    '#6C5CE7', // Bright purple
+    '#00B894', // Emerald
+    '#FFA502', // Orange
+    '#70A1FF', // Sky blue
+    '#FF9FF3', // Pink
+    '#54A0FF', // Blue
+    '#FF9F43', // Light orange
+    '#00D2D3', // Teal
+    '#FF6B81', // Rose
+    '#48DBFB', // Light blue
+    '#1DD1A1', // Green
+    '#FECA57', // Yellow
+    '#FF9FF3', // Light pink
+    '#5F27CD', // Deep purple
+    '#FF9F43', // Peach
+    '#00D2D3', // Cyan
+    '#FF6B81', // Salmon
+    '#48DBFB', // Aqua
+    '#1DD1A1', // Mint green
+    '#FECA57', // Gold
+  ]
+
+  // Use modulo to cycle through colors if we have more buildings than colors
+  return brightColors[index % brightColors.length]
 }
 
 export function NeighborhoodPage() {
@@ -93,7 +106,7 @@ export function NeighborhoodPage() {
     fetchLocations()
   }, [authUser, authLoading, navigate])
 
-  // Transform spending locations into buildings
+  // Transform spending locations into buildings, maintaining original order
   const buildings = spendingLocations.map((location, index) => {
     // Calculate total height based on spending
     const spendingHeight = location.totalSpent * HEIGHT_PER_DOLLAR
@@ -114,10 +127,14 @@ export function NeighborhoodPage() {
       category: location.category,
       position,
       size,
-      color: getColorForCategory(location.category),
-      totalSpent: location.totalSpent
+      color: generateBrightColor(index),
+      totalSpent: location.totalSpent,
+      originalIndex: index // Add original index to maintain order
     }
   })
+
+  // Sort buildings by their original index to maintain Dashboard order
+  const sortedBuildings = [...buildings].sort((a, b) => a.originalIndex - b.originalIndex)
 
   const handleBuildingClick = (info: BuildingInfo) => {
     // Find the corresponding spending location
@@ -180,7 +197,7 @@ export function NeighborhoodPage() {
   return (
     <Layout fullScreen>
       <div className="relative w-full h-full">
-        <NeighborhoodScene buildings={buildings} onBuildingClick={handleBuildingClick} />
+        <NeighborhoodScene buildings={sortedBuildings} onBuildingClick={handleBuildingClick} />
         <SpendingBar 
           locations={spendingLocations}
           onLocationClick={handleLocationClick}

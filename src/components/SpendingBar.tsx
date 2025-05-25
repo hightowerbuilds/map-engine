@@ -14,20 +14,23 @@ interface SpendingBarProps {
   selectedLocationId?: string
 }
 
-// Helper function to generate a color based on category (reusing from NeighborhoodPage)
-function getColorForCategory(category: string): string {
-  const colors: { [key: string]: string } = {
-    'Restaurant': '#e24a4a',
-    'Retail': '#4a90e2',
-    'Entertainment': '#e2a84a',
-    'Services': '#50c878',
-    'Transportation': '#9b4ae2',
-    'Healthcare': '#e24a9b',
-    'Education': '#4ae2d9',
-    'Other': '#808080'
-  }
-  
-  return colors[category] || '#808080'
+// Generate a green shade based on spending amount
+function getGreenShade(totalSpent: number): string {
+  // Define min and max spending amounts for color scaling
+  const minSpent = 0
+  const maxSpent = 1000 // Adjust this based on your typical spending range
+
+  // Normalize the spending amount between 0 and 1
+  const normalizedSpent = Math.min(Math.max((totalSpent - minSpent) / (maxSpent - minSpent), 0), 1)
+
+  // Generate a green color where:
+  // - Lower amounts are darker green (#1a472a)
+  // - Higher amounts are brighter green (#50fa7b)
+  const r = Math.floor(26 + (normalizedSpent * (80 - 26))) // 26 to 80
+  const g = Math.floor(71 + (normalizedSpent * (250 - 71))) // 71 to 250
+  const b = Math.floor(42 + (normalizedSpent * (123 - 42))) // 42 to 123
+
+  return `rgb(${r}, ${g}, ${b})`
 }
 
 // Calculate circle size based on spending amount
@@ -80,7 +83,7 @@ export function SpendingBar({ locations, onLocationClick, selectedLocationId }: 
                 style={{
                   width: size,
                   height: size,
-                  backgroundColor: getColorForCategory(location.category)
+                  backgroundColor: getGreenShade(location.totalSpent)
                 }}
               >
                 <span 

@@ -35,7 +35,8 @@ export function NavBar() {
     padding: '0.5rem 1rem',
     borderRadius: '5px',
     transition: 'all 0.2s ease',
-    backgroundColor: active ? 'rgba(74, 144, 226, 0.1)' : 'transparent'
+    backgroundColor: active ? 'rgba(74, 144, 226, 0.1)' : 'transparent',
+    fontFamily: 'monospace'
   })
 
   return (

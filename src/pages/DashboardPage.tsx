@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Layout } from '../components/Layout'
 import { EditLocationModal } from '../components/EditLocationModal'
+import { AddLocationModal } from '../components/AddLocationModal'
 import { useAuth } from '../contexts/AuthContext'
 import { auth, db } from '../lib/supabase'
 import type { Database } from '../lib/supabase'
@@ -24,6 +25,7 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [editingLocation, setEditingLocation] = useState<SpendingLocation | null>(null)
+  const [showAddModal, setShowAddModal] = useState(false)
 
   const handleLogout = async () => {
     setIsLoggingOut(true)
@@ -121,6 +123,19 @@ export function DashboardPage() {
     } catch (err) {
       console.error('Error updating location:', err)
       throw err
+    }
+  }
+
+  const handleAddLocation = async (newLocation: SpendingLocation) => {
+    try {
+      // Add the new location to both states
+      setSpendingLocations(locations => [...locations, newLocation])
+      
+      // Add to locationsWithTotals with 0 total spent
+      setLocationsWithTotals(locations => [...locations, { ...newLocation, totalSpent: 0 }])
+    } catch (err) {
+      console.error('Error adding location:', err)
+      setError(err instanceof Error ? err.message : 'Failed to add location')
     }
   }
 
@@ -248,6 +263,12 @@ export function DashboardPage() {
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Spending Locations</h2>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Add Location
+              </button>
             </div>
             <div className="space-y-4">
               {locationsWithTotals.map((location) => (
@@ -278,6 +299,13 @@ export function DashboardPage() {
         location={editingLocation}
         onSave={handleEditLocation}
         onSpendingChange={fetchLocationsWithTotals}
+      />
+
+      <AddLocationModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSave={handleAddLocation}
+        userId={authUser?.id || ''}
       />
     </Layout>
   )

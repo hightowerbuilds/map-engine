@@ -23,6 +23,7 @@
     "@types/three": "^0.176.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-draggable": "^4.4.6",
     "tailwindcss": "^4.0.6",
     "three": "^0.176.0"
   },

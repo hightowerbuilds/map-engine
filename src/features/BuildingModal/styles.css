@@ -1,0 +1,99 @@
+.building-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.building-modal-container {
+  background-color: rgba(255, 255, 255, 0.95);
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  min-width: 300px;
+  max-width: 400px;
+  backdrop-filter: blur(5px);
+  font-family: 'Courier', monospace;
+}
+
+.building-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+.building-modal-title {
+  margin: 0;
+  color: #333;
+  font-family: 'Courier', monospace;
+}
+
+.building-modal-subtitle {
+  margin: 5px 0 0 0;
+  color: #666;
+  font-size: 0.9em;
+}
+
+.building-modal-close-button {
+  border: none;
+  background: none;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 5px;
+  color: #666;
+  font-family: 'Courier', monospace;
+}
+
+.building-modal-content {
+  margin-bottom: 15px;
+}
+
+.building-modal-total {
+  margin: 0 0 10px 0;
+  color: #444;
+}
+
+.building-modal-transactions {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.building-modal-transaction {
+  padding: 8px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+
+.building-modal-transaction:last-child {
+  border-bottom: none;
+}
+
+.building-modal-transaction-amount {
+  color: #333;
+}
+
+.building-modal-transaction-date {
+  color: #666;
+  font-size: 12px;
+}
+
+.building-modal-transaction-description {
+  color: #666;
+  font-size: 12px;
+  font-style: italic;
+} 

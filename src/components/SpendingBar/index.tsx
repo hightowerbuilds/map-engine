@@ -1,5 +1,6 @@
 import React from 'react'
-import type { Database } from '../lib/supabase'
+import type { Database } from '../../lib/supabase'
+import './styles.css'
 
 type SpendingLocation = Database['public']['Tables']['spending_locations']['Row']
 type SpendingAmount = Database['public']['Tables']['spending_amounts']['Row']
@@ -46,23 +47,8 @@ export function SpendingBar({ locations, onLocationClick, selectedLocationId }: 
   const maxSpent = Math.max(...locations.map(loc => loc.totalSpent))
 
   return (
-    <div 
-      className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 shadow-lg"
-      style={{ 
-        height: '180px',
-        zIndex: 1000,
-        padding: '24px',
-        overflowX: 'auto',
-        whiteSpace: 'nowrap'
-      }}
-    >
-      <div 
-        className="flex items-center gap-10 px-6"
-        style={{ 
-          minWidth: 'min-content',
-          height: '100%'
-        }}
-      >
+    <div className="spending-bar">
+      <div className="spending-bar-container">
         {locations.map((location) => {
           const size = calculateCircleSize(location.totalSpent, maxSpent)
           const isSelected = location.id === selectedLocationId
@@ -70,16 +56,11 @@ export function SpendingBar({ locations, onLocationClick, selectedLocationId }: 
           return (
             <div
               key={location.id}
-              className="flex flex-col items-center cursor-pointer group hover:-translate-y-1 transition-transform duration-200"
+              className={`spending-bar-item ${isSelected ? 'selected' : ''}`}
               onClick={() => onLocationClick(location)}
-              style={{ 
-                transform: isSelected ? 'scale(1.1)' : 'scale(1)'
-              }}
             >
               <div
-                className={`relative rounded-full flex items-center justify-center transition-all duration-200 ${
-                  isSelected ? 'ring-4 ring-blue-500 shadow-lg' : 'shadow-md'
-                }`}
+                className={`spending-bar-circle ${isSelected ? 'selected' : ''}`}
                 style={{
                   width: size,
                   height: size,
@@ -87,26 +68,19 @@ export function SpendingBar({ locations, onLocationClick, selectedLocationId }: 
                 }}
               >
                 <span 
-                  className="text-white font-mono text-sm font-bold"
+                  className="spending-bar-amount"
                   style={{
-                    fontSize: `${Math.max(14, size * 0.2)}px`
+                    fontSize: `${Math.max(16, size * 0.22)}px`
                   }}
                 >
                   ${Math.round(location.totalSpent).toLocaleString()}
                 </span>
               </div>
-              <div 
-                className="mt-3 text-center"
-                style={{
-                  maxWidth: size,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis'
-                }}
-              >
-                <p className="text-sm font-medium text-gray-900 truncate">
+              <div className="spending-bar-info">
+                <p className="spending-bar-name">
                   {location.name}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="spending-bar-category">
                   {location.category}
                 </p>
               </div>

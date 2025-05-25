@@ -1,0 +1,19 @@
+.navbar {
+  @apply flex items-center justify-between px-6 py-4 bg-white shadow-md;
+}
+
+.navbar-brand {
+  @apply flex items-center;
+}
+
+.navbar-logo {
+  @apply text-2xl font-bold text-gray-800 hover:text-gray-600 transition-colors;
+}
+
+.navbar-menu {
+  @apply flex items-center space-x-6;
+}
+
+.navbar-item {
+  @apply text-gray-600 hover:text-gray-800 transition-colors;
+} 

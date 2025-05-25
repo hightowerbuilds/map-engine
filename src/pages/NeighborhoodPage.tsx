@@ -6,7 +6,7 @@ import { Layout } from '../components/Layout'
 import { useAuth } from '../contexts/AuthContext'
 import { db } from '../lib/supabase'
 import type { Database } from '../lib/supabase'
-import type { BuildingInfo } from '../features/BuildingModal'
+import type { BuildingInfo } from '../features/BuildingModal/index'
 
 type SpendingLocation = Database['public']['Tables']['spending_locations']['Row']
 type SpendingAmount = Database['public']['Tables']['spending_amounts']['Row']

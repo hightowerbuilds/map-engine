@@ -49,16 +49,25 @@ export function DashboardPage() {
     if (!authUser) return
 
     try {
+      console.log('Dashboard: Fetching locations for user:', authUser.id)
       const locations = await db.spendingLocations.getByUserId(authUser.id)
+      console.log('Dashboard: Fetched locations:', locations)
       
-      // Get totals for each location
-      const locationsWithTotals = await Promise.all(
-        locations.map(async (location) => {
-          const total = await db.spendingAmounts.getTotalByLocationId(location.id)
-          return { ...location, totalSpent: total }
-        })
-      )
+      // Get all totals in a single query
+      const totals = await db.spendingAmounts.getAllTotalsByLocationIds(locations.map(loc => loc.id))
+      console.log('Dashboard: Fetched totals:', Object.fromEntries(totals))
       
+      // Combine locations with their totals
+      const locationsWithTotals = locations.map(location => {
+        const total = totals.get(location.id) || 0
+        console.log(`Dashboard: Location ${location.id} (${location.name}) total:`, total)
+        return {
+          ...location,
+          totalSpent: total
+        }
+      })
+      
+      console.log('Dashboard: Combined locations with totals:', locationsWithTotals)
       setSpendingLocations(locationsWithTotals)
       setLocationsWithTotals(locationsWithTotals)
     } catch (err) {
@@ -86,8 +95,17 @@ export function DashboardPage() {
         console.log('Dashboard: Fetching user data for ID:', authUser.id)
         const userData = await db.users.getById(authUser.id)
         console.log('Dashboard: User data fetched:', userData)
+        
+        // Check for null values in user data
+        if (!userData) {
+          throw new Error('User data is null')
+        }
+        if (typeof userData.current_balance !== 'number') {
+          console.error('Dashboard: current_balance is not a number:', userData.current_balance)
+          throw new Error('Invalid user data: current_balance is not a number')
+        }
+        
         setUser(userData)
-
         await fetchLocationsWithTotals()
       } catch (err) {
         console.error('Dashboard: Error fetching user data:', err)

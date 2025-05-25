@@ -264,6 +264,24 @@ export const db = {
       if (error) throw error
       return data.reduce((sum, record) => sum + record.amount, 0)
     },
+
+    getAllTotalsByLocationIds: async (locationIds: Array<string>) => {
+      const { data, error } = await supabase
+        .from('spending_amounts')
+        .select('spending_location_id, amount')
+        .in('spending_location_id', locationIds)
+      
+      if (error) throw error
+      
+      // Group by location_id and sum amounts
+      const totals = new Map<string, number>()
+      for (const record of data) {
+        const current = totals.get(record.spending_location_id) || 0
+        totals.set(record.spending_location_id, current + record.amount)
+      }
+      
+      return totals
+    },
     
     update: async (id: string, updates: Database['public']['Tables']['spending_amounts']['Update']) => {
       const { data, error } = await supabase

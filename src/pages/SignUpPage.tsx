@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
+import { db } from '../lib/supabase'
 
 interface SpendingLocation {
   name: string
@@ -8,6 +9,8 @@ interface SpendingLocation {
 
 export function SignUpPage() {
   const navigate = useNavigate()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -24,12 +27,50 @@ export function SignUpPage() {
     ] as Array<SpendingLocation>
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // TODO: Handle form submission
-    console.log('Form submitted:', formData)
-    // Navigate to home page after submission
-    navigate({ to: '/' })
+    setIsSubmitting(true)
+    setError(null)
+
+    try {
+      // Create user in the database
+      const userData = {
+        email: formData.email,
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        bank: formData.bank,
+        current_balance: parseFloat(formData.currentBalance),
+        address: formData.address
+      }
+
+      // Create user and get the response with the generated id
+      const newUser = await db.users.create(userData)
+
+      if (!newUser?.id) {
+        throw new Error('Failed to create user: No user ID returned')
+      }
+
+      // Create spending locations for the user
+      const spendingLocationPromises = formData.spendingLocations
+        .filter(location => location.name && location.category) // Only create non-empty locations
+        .map(location => 
+          db.spendingLocations.create({
+            user_id: newUser.id,
+            name: location.name,
+            category: location.category
+          })
+        )
+
+      await Promise.all(spendingLocationPromises)
+
+      // Navigate to home page after successful signup
+      navigate({ to: '/' })
+    } catch (err) {
+      console.error('Signup error:', err)
+      setError(err instanceof Error ? err.message : 'An error occurred during signup')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleSpendingLocationChange = (index: number, field: keyof SpendingLocation, value: string) => {
@@ -53,6 +94,12 @@ export function SignUpPage() {
           </p>
         </div>
 
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-600">{error}</p>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="bg-white shadow-lg rounded-lg p-8">
           <div className="space-y-8">
             {/* Personal Information */}
@@ -68,6 +115,7 @@ export function SignUpPage() {
                   onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   required
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -82,6 +130,7 @@ export function SignUpPage() {
                   onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   required
+                  disabled={isSubmitting}
                 />
               </div>
             </div>
@@ -98,6 +147,7 @@ export function SignUpPage() {
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 required
+                disabled={isSubmitting}
               />
             </div>
 
@@ -114,6 +164,7 @@ export function SignUpPage() {
                   onChange={(e) => setFormData({ ...formData, bank: e.target.value })}
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   required
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -130,6 +181,7 @@ export function SignUpPage() {
                   required
                   min="0"
                   step="0.01"
+                  disabled={isSubmitting}
                 />
               </div>
             </div>
@@ -147,6 +199,7 @@ export function SignUpPage() {
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 required
                 placeholder="Street address, City, State, ZIP"
+                disabled={isSubmitting}
               />
             </div>
 
@@ -171,6 +224,7 @@ export function SignUpPage() {
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                       placeholder="e.g., Starbucks, Target, etc."
                       required
+                      disabled={isSubmitting}
                     />
                   </div>
                   <div>
@@ -185,6 +239,7 @@ export function SignUpPage() {
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                       placeholder="e.g., Coffee, Groceries, etc."
                       required
+                      disabled={isSubmitting}
                     />
                   </div>
                 </div>
@@ -195,9 +250,12 @@ export function SignUpPage() {
             <div className="pt-6">
               <button
                 type="submit"
-                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+                className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200 ${
+                  isSubmitting ? 'opacity-75 cursor-not-allowed' : ''
+                }`}
+                disabled={isSubmitting}
               >
-                Complete Sign Up
+                {isSubmitting ? 'Creating Account...' : 'Complete Sign Up'}
               </button>
             </div>
           </div>

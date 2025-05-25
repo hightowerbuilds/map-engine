@@ -4,12 +4,26 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
+// Debug logging
+console.log('Supabase URL:', supabaseUrl ? 'Present' : 'Missing')
+console.log('Supabase Anon Key:', supabaseAnonKey ? 'Present' : 'Missing')
+
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables. Please check your .env file.')
+  throw new Error(
+    'Missing Supabase environment variables. Please check your .env file contains:\n' +
+    'VITE_SUPABASE_URL=your_project_url\n' +
+    'VITE_SUPABASE_ANON_KEY=your_anon_key'
+  )
 }
 
 // Create a single supabase client for interacting with your database
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  }
+})
 
 // Type definitions for our database tables
 export type Database = {
@@ -78,10 +92,13 @@ export type Database = {
 export const db = {
   // User operations
   users: {
-    create: async (userData: Database['public']['Tables']['users']['Insert']) => {
+    create: async (userData: Omit<Database['public']['Tables']['users']['Insert'], 'id' | 'created_at'>) => {
       const { data, error } = await supabase
         .from('users')
-        .insert(userData)
+        .insert({
+          ...userData,
+          // Let Supabase handle id and created_at
+        })
         .select()
         .single()
       

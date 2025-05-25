@@ -39,6 +39,7 @@ export type Database = {
           bank: string
           current_balance: number
           address: string
+          password: string
         }
         Insert: {
           id?: string
@@ -49,6 +50,7 @@ export type Database = {
           bank: string
           current_balance: number
           address: string
+          password: string
         }
         Update: {
           id?: string
@@ -59,6 +61,7 @@ export type Database = {
           bank?: string
           current_balance?: number
           address?: string
+          password?: string
         }
       }
       spending_locations: {

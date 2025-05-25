@@ -27,6 +27,12 @@ export function HomePage() {
           >
             Banking Services
           </Link>
+          <Link
+            to="/signup"
+            className="px-8 py-4 text-lg font-semibold text-blue-600 transition-colors bg-white rounded-lg hover:bg-gray-100"
+          >
+            Sign Up
+          </Link>
         </div>
       </div>
     </div>

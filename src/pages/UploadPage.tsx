@@ -5,7 +5,7 @@ import { ExtractedTransactions } from '../components/UploadPage/ExtractedTransac
 import { PastUploads } from '../components/UploadPage/PastUploads'
 import { UploadDropzone } from '../components/UploadPage/UploadDropzone'
 import { UploadHeader } from '../components/UploadPage/UploadHeader'
-import { UploadPreview } from '../components/UploadPage/UploadPreview'
+import { PDFViewer } from '../components/UploadPage/PDFViewer'
 import { useAuth } from '../contexts/AuthContext'
 import { uploads } from '../lib/db/uploads'
 import type { Transaction, Upload } from '../lib/db/uploads'
@@ -88,7 +88,7 @@ export function UploadPage() {
   return (
     <Layout>
       <div className="min-h-screen bg-white p-8 font-mono">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-4xl mx-auto">
           <UploadHeader />
           
           <UploadDropzone
@@ -101,6 +101,8 @@ export function UploadPage() {
             onDragLeave={handleDragLeave}
             onFileSelect={handleFileInput}
           />
+
+          <PDFViewer file={selectedFile} />
           
           <PastUploads uploads={pastUploads} />
 

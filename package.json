@@ -20,6 +20,7 @@
     "@tanstack/react-router": "^1.15.0",
     "@tanstack/react-router-devtools": "^1.15.0",
     "@tanstack/router-plugin": "^1.15.0",
+    "@types/pdfjs-dist": "^2.10.377",
     "@types/three": "^0.161.2",
     "pdfjs-dist": "^5.2.133",
     "react": "^18.2.0",

@@ -4,13 +4,21 @@ import { RouterProvider } from '@tanstack/react-router'
 import { router } from './router'
 import { AuthProvider } from './contexts/AuthContext'
 import './styles.css'
-import reportWebVitals from './reportWebVitals.ts'
 
 // Register the router instance for type safety
 declare module '@tanstack/react-router' {
   interface Register {
     router: typeof router
   }
+}
+
+// Create a wrapper component that provides auth context
+function App() {
+  return (
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
+  )
 }
 
 // Render the app
@@ -22,13 +30,6 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement)
 root.render(
   <React.StrictMode>
-    <AuthProvider>
-      <RouterProvider router={router} />
-    </AuthProvider>
+    <App />
   </React.StrictMode>
 )
-
-// If you want to start measuring performance in your app, pass a function
-// to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
-reportWebVitals()

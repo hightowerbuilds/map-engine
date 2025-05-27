@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { Layout } from '../components/Layout'
 import { EditLocationModal } from '../components/EditLocationModal'
 import { AddLocationModal } from '../components/AddLocationModal'
+import { StorageFileList } from '../components/UploadPage/StorageFileList'
 import { useAuth } from '../contexts/AuthContext'
 import { auth, db } from '../lib/supabase'
 import type { Database } from '../lib/supabase'
@@ -230,9 +231,6 @@ export function DashboardPage() {
           {/* Header */}
           <div className="mb-8 flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                Welcome, {user.first_name}
-              </h1>
               <p className="text-gray-600">Account Dashboard</p>
             </div>
           </div>
@@ -265,7 +263,7 @@ export function DashboardPage() {
           </div>
 
           {/* Spending Locations */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Spending Locations</h2>
               <button
@@ -294,6 +292,20 @@ export function DashboardPage() {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Bank Statements */}
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Bank Statements</h2>
+              <button
+                onClick={() => navigate({ to: '/upload' })}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Upload New
+              </button>
+            </div>
+            <StorageFileList />
           </div>
         </div>
       </div>

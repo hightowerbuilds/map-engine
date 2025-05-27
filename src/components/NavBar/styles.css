@@ -1,13 +1,29 @@
 .navbar {
-  @apply flex items-center justify-between px-6 py-4 bg-white shadow-md;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  background-color: #ffffff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .navbar-brand {
-  @apply flex items-center;
+  display: flex;
+  align-items: center;
 }
 
 .navbar-logo {
-  @apply text-2xl font-bold text-gray-800 hover:text-gray-600 transition-colors;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #000000;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  user-select: none;
+}
+
+.navbar-logo:hover {
+  transform: scale(1.05);
+  color: #333333;
 }
 
 .navbar-menu {
@@ -15,5 +31,14 @@
 }
 
 .navbar-item {
-  @apply text-gray-600 hover:text-gray-800 transition-colors;
+  @apply text-gray-600 hover:text-gray-800 transition-colors no-underline;
+}
+
+.navbar-welcome {
+  @apply text-gray-700 font-medium;
+}
+
+.navbar-logout {
+  @apply bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2 rounded-md transition-colors;
+  @apply border border-red-200 hover:border-red-300;
 } 

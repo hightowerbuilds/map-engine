@@ -1,17 +1,22 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { Layout } from '../components/Layout'
 import { UploadSuccessModal } from '../components/UploadSuccessModal'
-import { ExtractedTransactions } from '../components/UploadPage/ExtractedTransactions'
 import { PastUploads } from '../components/UploadPage/PastUploads'
+import { SpendingAnalysis } from '../components/UploadPage/SpendingAnalysis'
+import { StorageFileList } from '../components/UploadPage/StorageFileList'
 import { UploadDropzone } from '../components/UploadPage/UploadDropzone'
 import { UploadHeader } from '../components/UploadPage/UploadHeader'
-import { PDFViewer } from '../components/UploadPage/PDFViewer'
 import { useAuth } from '../contexts/AuthContext'
+import { geminiService } from '../lib/gemini'
 import { uploads } from '../lib/db/uploads'
-import type { Transaction, Upload } from '../lib/db/uploads'
+import { supabase } from '../lib/supabase'
+import type { SpendingAnalysis as SpendingAnalysisType } from '../lib/gemini'
+import type { Upload } from '../lib/db/uploads'
 
 export function UploadPage() {
-  const { user: authUser } = useAuth()
+  const navigate = useNavigate()
+  const { user: authUser, session, loading: authLoading } = useAuth()
   const [isDragging, setIsDragging] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -19,48 +24,164 @@ export function UploadPage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [pastUploads, setPastUploads] = useState<Array<Upload>>([])
   const [currentUploadId, setCurrentUploadId] = useState<string | null>(null)
-  const [transactions, setTransactions] = useState<Array<Transaction>>([])
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null)
+  const [currentAnalysis, setCurrentAnalysis] = useState<SpendingAnalysisType | null>(null)
+
+  // Handle authentication and storage access
+  useEffect(() => {
+    if (authLoading) return
+
+    const checkAccess = async () => {
+      if (!authUser || !session) {
+        console.log('No authenticated user or session, redirecting to home')
+        navigate({ to: '/' })
+        return
+      }
+
+      try {
+        // Test storage access
+        const { data: bucketData, error: bucketError } = await supabase
+          .storage
+          .getBucket('bank-statements')
+
+        if (bucketError) {
+          console.error('Bucket access error:', bucketError)
+          setError('Storage access error. Please contact support.')
+          return
+        }
+
+        console.log('Storage bucket access verified:', bucketData)
+        setError(null)
+      } catch (err) {
+        console.error('Access check error:', err)
+        setError('Failed to access storage. Please try again.')
+      }
+    }
+
+    checkAccess()
+  }, [authLoading, authUser, session, navigate])
 
   const handleFileSelect = useCallback(async (file: File) => {
-    if (!authUser) {
+    if (!authUser || !session) {
       setError('You must be logged in to upload files')
-      return
-    }
-
-    if (file.type !== 'application/pdf') {
-      setError('Please select a PDF file')
-      return
-    }
-
-    if (file.size > 10 * 1024 * 1024) { // 10MB limit
-      setError('File size must be less than 10MB')
       return
     }
 
     try {
       setIsProcessing(true)
       setError(null)
+      setCurrentAnalysis(null)
+
+      // Validate file type
+      if (!file.type.includes('pdf')) {
+        throw new Error('Only PDF files are supported')
+      }
 
       // Create upload record
+      console.log('Creating upload record...')
       const uploadRecord = await uploads.create(authUser.id, file.name, file.size)
+
+      if (!uploadRecord) {
+        throw new Error('Failed to create upload record')
+      }
+
       setCurrentUploadId(uploadRecord.id)
+      console.log('Upload record created:', uploadRecord.id)
+
+      // Upload file to Supabase storage
+      console.log('Uploading file to storage...')
+      const filePath = `${authUser.id}/${uploadRecord.id}/${file.name}`
+      const { error: uploadError } = await supabase.storage
+        .from('bank-statements')
+        .upload(filePath, file)
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError)
+        throw new Error(`Failed to upload file: ${uploadError.message}`)
+      }
+
+      console.log('File uploaded successfully')
+
+      // Generate signed URL for preview
+      console.log('Generating signed URL...')
+      const { data, error: signedUrlError } = await supabase.storage
+        .from('bank-statements')
+        .createSignedUrl(filePath, 3600) // 1 hour expiry
+
+      if (signedUrlError) {
+        console.error('Signed URL error details:', {
+          error: signedUrlError,
+          message: signedUrlError.message,
+          name: signedUrlError.name,
+          stack: signedUrlError.stack
+        })
+        throw new Error(`Failed to generate preview URL: ${signedUrlError.message}`)
+      }
+
+      console.log('Generated signed URL successfully')
+      setPdfPreviewUrl(data.signedUrl)
       setSelectedFile(file)
-      setShowSuccessModal(true)
 
-      // Update upload status to completed
-      await uploads.updateStatus(uploadRecord.id, 'completed')
+      try {
+        // Download the file for analysis
+        console.log('Downloading file for analysis...')
+        const { data: pdfData, error: downloadError } = await supabase.storage
+          .from('bank-statements')
+          .download(filePath)
 
-      // Refresh uploads list
-      const updatedUploads = await uploads.getByUserId(authUser.id)
-      setPastUploads(updatedUploads)
+        if (downloadError) {
+          console.error('Download error:', downloadError)
+          throw new Error(`Failed to download file for analysis: ${downloadError.message}`)
+        }
 
+        // Convert to ArrayBuffer for PDF.js
+        console.log('Converting file to ArrayBuffer...')
+        const arrayBuffer = await pdfData.arrayBuffer()
+        console.log('ArrayBuffer created, size:', arrayBuffer.byteLength)
+
+        // Analyze the PDF with Gemini
+        console.log('Starting PDF analysis with Gemini...')
+        try {
+          const analysis = await geminiService.analyzePDF(arrayBuffer)
+          console.log('PDF analysis complete:', {
+            locationCount: analysis.locations.length,
+            transactionCount: analysis.summary.transactionCount,
+            totalSpent: analysis.summary.totalSpent
+          })
+
+          // Store the analysis results
+          console.log('Storing analysis results...')
+          await uploads.saveAnalysis(uploadRecord.id, analysis)
+
+          // Update the UI with the analysis
+          setCurrentAnalysis(analysis)
+
+          // Update upload status to completed
+          await uploads.updateStatus(uploadRecord.id, 'completed')
+          setShowSuccessModal(true)
+
+          // Refresh the uploads list
+          const updatedUploads = await uploads.getByUserId(authUser.id)
+          setPastUploads(updatedUploads)
+        } catch (geminiError) {
+          console.error('Gemini analysis error:', geminiError)
+          // Update upload status to failed but keep the file
+          await uploads.updateStatus(uploadRecord.id, 'failed')
+          throw new Error(`PDF analysis failed: ${geminiError instanceof Error ? geminiError.message : 'Unknown error'}. The file was uploaded but could not be analyzed.`)
+        }
+      } catch (analysisError) {
+        console.error('Analysis error:', analysisError)
+        // Update upload status to failed but keep the file
+        await uploads.updateStatus(uploadRecord.id, 'failed')
+        throw new Error(`File analysis failed: ${analysisError instanceof Error ? analysisError.message : 'Unknown error'}. The file was uploaded but could not be analyzed.`)
+      }
     } catch (err) {
-      console.error('Error uploading file:', err)
-      setError('Failed to upload file. Please try again.')
+      console.error('Upload error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to upload file')
     } finally {
       setIsProcessing(false)
     }
-  }, [authUser])
+  }, [authUser, session])
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault()
@@ -101,17 +222,24 @@ export function UploadPage() {
             onDragLeave={handleDragLeave}
             onFileSelect={handleFileInput}
           />
-
-          <PDFViewer file={selectedFile} />
+          
+          {currentAnalysis && (
+            <SpendingAnalysis analysis={currentAnalysis} />
+          )}
           
           <PastUploads uploads={pastUploads} />
 
           {/* Privacy Note */}
           <div className="mt-8 p-4 bg-gray-50 rounded-lg">
             <p className="text-sm text-gray-600">
-              Your data privacy is our priority. All uploaded statements are processed securely 
-              and deleted after analysis. We only store the extracted spending data in your account.
+              Your data privacy is our priority. All uploaded statements are stored securely 
+              in your private storage bucket.
             </p>
+          </div>
+
+          {/* Add the StorageFileList component */}
+          <div className="mt-8">
+            <StorageFileList />
           </div>
         </div>
       </div>
@@ -120,6 +248,7 @@ export function UploadPage() {
         isOpen={showSuccessModal}
         onClose={() => setShowSuccessModal(false)}
         fileName={selectedFile?.name || ''}
+        pdfUrl={pdfPreviewUrl}
       />
     </Layout>
   )

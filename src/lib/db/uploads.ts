@@ -1,5 +1,6 @@
 import { supabase } from '../supabase'
 import type { Database } from '../supabase'
+import type { SpendingAnalysis } from '../gemini'
 
 export type Upload = Database['public']['Tables']['uploads']['Row']
 
@@ -106,5 +107,20 @@ export const uploads = {
     }
 
     return data
+  },
+
+  async saveAnalysis(uploadId: string, analysis: SpendingAnalysis): Promise<void> {
+    const { error } = await supabase
+      .from('uploads')
+      .update({
+        analysis_results: analysis,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', uploadId)
+
+    if (error) {
+      console.error('Error saving analysis:', error)
+      throw new Error(`Failed to save analysis: ${error.message}`)
+    }
   }
 } 

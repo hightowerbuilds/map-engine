@@ -4,6 +4,7 @@ import { NeighborhoodPage } from './pages/NeighborhoodPage'
 import { SignUpPage } from './pages/SignUpPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { UploadPage } from './pages/UploadPage'
+import { ProtectedRoute } from './components/ProtectedRoute'
 
 // Create the root route
 const rootRoute = createRootRoute()
@@ -18,7 +19,11 @@ const indexRoute = createRoute({
 const neighborhoodRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/neighborhood',
-  component: NeighborhoodPage,
+  component: () => (
+    <ProtectedRoute>
+      <NeighborhoodPage />
+    </ProtectedRoute>
+  ),
 })
 
 const signupRoute = createRoute({
@@ -30,13 +35,21 @@ const signupRoute = createRoute({
 const dashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/dashboard',
-  component: DashboardPage,
+  component: () => (
+    <ProtectedRoute>
+      <DashboardPage />
+    </ProtectedRoute>
+  ),
 })
 
 const uploadRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/upload',
-  component: UploadPage,
+  component: () => (
+    <ProtectedRoute>
+      <UploadPage />
+    </ProtectedRoute>
+  ),
 })
 
 // Create the route tree

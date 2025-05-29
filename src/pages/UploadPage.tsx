@@ -2,15 +2,12 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Layout } from '../components/Layout'
 import { UploadSuccessModal } from '../components/UploadSuccessModal'
-import { SpendingAnalysis } from '../components/UploadPage/SpendingAnalysis'
 import { StorageFileList } from '../components/UploadPage/StorageFileList'
 import { UploadDropzone } from '../components/UploadPage/UploadDropzone'
 import { UploadHeader } from '../components/UploadPage/UploadHeader'
 import { useAuth } from '../contexts/AuthContext'
-import { geminiService } from '../lib/gemini'
 import { uploads } from '../lib/db/uploads'
 import { supabase } from '../lib/supabase'
-import type { SpendingAnalysis as SpendingAnalysisType } from '../lib/gemini'
 import type { Upload } from '../lib/db/uploads'
 
 export function UploadPage() {
@@ -23,7 +20,6 @@ export function UploadPage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [currentUploadId, setCurrentUploadId] = useState<string | null>(null)
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null)
-  const [currentAnalysis, setCurrentAnalysis] = useState<SpendingAnalysisType | null>(null)
 
   // Handle authentication and storage access
   useEffect(() => {
@@ -68,7 +64,6 @@ export function UploadPage() {
     try {
       setIsProcessing(true)
       setError(null)
-      setCurrentAnalysis(null)
 
       // Validate file type
       if (!file.type.includes('pdf')) {
@@ -121,78 +116,26 @@ export function UploadPage() {
       setSelectedFile(file)
       setShowSuccessModal(true)
 
-      try {
-        // Download the file for analysis
-        console.log('Downloading file for analysis...')
-        const { data: pdfData, error: downloadError } = await supabase.storage
-          .from('bank-statements')
-          .download(filePath)
+      // Update upload status to completed
+      await uploads.updateStatus(uploadRecord.id, 'completed')
 
-        if (downloadError) {
-          console.error('Download error:', downloadError)
-          // Don't set error state, just log it since the file was uploaded successfully
-          console.error('Analysis download failed but file was uploaded:', downloadError)
-          await uploads.updateStatus(uploadRecord.id, 'failed')
-          return
-        }
-
-        // Convert to ArrayBuffer for PDF.js
-        console.log('Converting file to ArrayBuffer...')
-        const arrayBuffer = await pdfData.arrayBuffer()
-        console.log('ArrayBuffer created, size:', arrayBuffer.byteLength)
-
-        // Analyze the PDF with Gemini
-        console.log('Starting PDF analysis with Gemini...')
-        try {
-          const analysis = await geminiService.analyzePDF(arrayBuffer)
-          console.log('PDF analysis complete:', {
-            locationCount: analysis.locations.length,
-            transactionCount: analysis.summary.transactionCount,
-            totalSpent: analysis.summary.totalSpent
-          })
-
-          // Store the analysis results
-          console.log('Storing analysis results...')
-          await uploads.saveAnalysis(uploadRecord.id, analysis)
-
-          // Update the UI with the analysis
-          setCurrentAnalysis(analysis)
-
-          // Update upload status to completed
-          await uploads.updateStatus(uploadRecord.id, 'completed')
-        } catch (geminiError) {
-          console.error('Gemini analysis error:', geminiError)
-          // Update upload status to failed but keep the file
-          await uploads.updateStatus(uploadRecord.id, 'failed')
-          // Don't set error state, just log it since the file was uploaded successfully
-          console.error('Analysis failed but file was uploaded:', geminiError)
-        }
-      } catch (analysisError) {
-        console.error('Analysis error:', analysisError)
-        // Update upload status to failed but keep the file
-        await uploads.updateStatus(uploadRecord.id, 'failed')
-        // Don't set error state, just log it since the file was uploaded successfully
-        console.error('Analysis failed but file was uploaded:', analysisError)
-      }
     } catch (err) {
-      // Only set error state for actual upload failures
-      if (err instanceof Error && err.message.includes('Failed to upload file')) {
-        console.error('Upload error:', err)
-        setError(err.message)
-        setShowSuccessModal(false)
-      } else {
-        // For other errors, just log them but don't show to user
-        console.error('Non-upload error:', err)
+      console.error('Upload error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to upload file')
+      if (currentUploadId) {
+        await uploads.updateStatus(currentUploadId, 'failed')
       }
     } finally {
       setIsProcessing(false)
     }
-  }, [authUser, session])
+  }, [authUser, session, currentUploadId])
 
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
+  const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(false)
-    await handleFileSelect(e.dataTransfer.files[0])
+
+    const file = e.dataTransfer.files[0]
+    handleFileSelect(file)
   }, [handleFileSelect])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -205,18 +148,17 @@ export function UploadPage() {
     setIsDragging(false)
   }, [])
 
-  const handleFileInput = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      await handleFileSelect(file)
+      handleFileSelect(file)
     }
   }, [handleFileSelect])
 
-  const handleModalClose = useCallback(async () => {
+  const handleModalClose = useCallback(() => {
     setShowSuccessModal(false)
     setSelectedFile(null)
     setPdfPreviewUrl(null)
-    setCurrentAnalysis(null)
     setCurrentUploadId(null)
   }, [])
 
@@ -236,10 +178,6 @@ export function UploadPage() {
             onDragLeave={handleDragLeave}
             onFileSelect={handleFileInput}
           />
-          
-          {currentAnalysis && (
-            <SpendingAnalysis analysis={currentAnalysis} />
-          )}
 
           {/* Privacy Note */}
           <div className="mt-8 p-4 bg-gray-50 rounded-lg">

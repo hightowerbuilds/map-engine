@@ -1,6 +1,5 @@
 import { supabase } from '../supabase'
 import type { Database } from '../supabase'
-import type { SpendingAnalysis } from '../gemini'
 
 export type Upload = Database['public']['Tables']['uploads']['Row']
 
@@ -29,13 +28,16 @@ export const uploads = {
         user_id: userId,
         file_name: fileName,
         file_size: fileSize,
-        status: 'processing',
-        created_at: new Date().toISOString(),
+        status: 'processing'
       })
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.error('Error creating upload record:', error)
+      throw new Error(`Failed to create upload record: ${error.message}`)
+    }
+
     return data
   },
 
@@ -50,16 +52,19 @@ export const uploads = {
     return data
   },
 
-  async updateStatus(uploadId: string, status: 'processing' | 'completed' | 'failed') {
-    const { data, error } = await supabase
+  async updateStatus(uploadId: string, status: 'processing' | 'completed' | 'failed'): Promise<void> {
+    const { error } = await supabase
       .from('uploads')
-      .update({ status })
+      .update({
+        status,
+        updated_at: new Date().toISOString()
+      })
       .eq('id', uploadId)
-      .select()
-      .single()
 
-    if (error) throw error
-    return data
+    if (error) {
+      console.error('Error updating upload status:', error)
+      throw new Error(`Failed to update upload status: ${error.message}`)
+    }
   },
 
   async getTransactionsByUploadId(uploadId: string): Promise<Array<Transaction>> {
@@ -107,20 +112,5 @@ export const uploads = {
     }
 
     return data
-  },
-
-  async saveAnalysis(uploadId: string, analysis: SpendingAnalysis): Promise<void> {
-    const { error } = await supabase
-      .from('uploads')
-      .update({
-        analysis_results: analysis,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', uploadId)
-
-    if (error) {
-      console.error('Error saving analysis:', error)
-      throw new Error(`Failed to save analysis: ${error.message}`)
-    }
   }
 } 

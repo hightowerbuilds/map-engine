@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { PdfParseModal } from './PdfParseModal'
 import type { FileObject } from '@supabase/storage-js'
 
 interface StorageFile extends Omit<FileObject, 'metadata'> {
@@ -10,6 +11,15 @@ interface StorageFile extends Omit<FileObject, 'metadata'> {
   }
 }
 
+interface ParsedPdfData {
+  numpages: number
+  numrender: number
+  info: any
+  metadata: any
+  version: string
+  text: string
+}
+
 export function StorageFileList() {
   const { user: authUser, session, loading: authLoading } = useAuth()
   const [files, setFiles] = useState<Array<StorageFile>>([])
@@ -17,258 +27,370 @@ export function StorageFileList() {
   const [error, setError] = useState<string | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [parsedContent, setParsedContent] = useState<ParsedPdfData | null>(null)
+  const [showParseModal, setShowParseModal] = useState(false)
 
   useEffect(() => {
-    if (authLoading) {
-      console.log('StorageFileList: Auth still loading...')
-      return
-    }
+    if (authLoading) return
 
-    if (!authUser || !session) {
-      console.log('StorageFileList: No auth user or session:', { 
-        authUser: authUser ? { id: authUser.id, email: authUser.email } : null,
-        session: session ? { 
-          access_token: session.access_token ? 'present' : 'missing',
-          expires_at: session.expires_at,
-          refresh_token: session.refresh_token ? 'present' : 'missing'
-        } : null 
-      })
-      setError('Authentication required')
+    if (!authUser) {
+      setFiles([])
       setLoading(false)
       return
     }
 
-    const loadFiles = async () => {
+    const fetchFiles = async () => {
       try {
-        console.log('StorageFileList: Starting file load for user:', {
-          userId: authUser.id,
-          email: authUser.email,
-          hasSession: !!session,
-          hasAccessToken: !!session.access_token,
-          sessionExpiresAt: session.expires_at,
-          currentTime: new Date().toISOString()
+        console.log('=== Starting file fetch ===')
+        console.log('Auth user:', authUser.id)
+        
+        // First check project status
+        const { data: projectData, error: projectError } = await supabase
+          .from('storage.buckets')
+          .select('*')
+          .limit(1)
+
+        console.log('Project status check:', {
+          success: !projectError,
+          error: projectError,
+          data: projectData
         })
 
-        setLoading(true)
-        setError(null)
-
-        // Try to list the root of the bucket directly
-        console.log('StorageFileList: Attempting to list bucket root...')
-        const { data: rootFiles, error: rootError } = await supabase.storage
-          .from('bank-statements')
-          .list('')
-
-        if (rootError) {
-          console.error('StorageFileList: Error accessing bucket:', {
-            error: rootError,
-            message: rootError.message,
-            name: rootError.name
-          })
-          throw new Error(`Storage access error: ${rootError.message}`)
-        }
-
-        console.log('StorageFileList: Successfully accessed bucket root:', rootFiles)
-
-        // Now try to list the user's folder
-        console.log('StorageFileList: Listing user folder:', authUser.id)
-        const { data: userFolders, error: foldersError } = await supabase.storage
-          .from('bank-statements')
-          .list(authUser.id)
-
-        if (foldersError) {
-          console.error('StorageFileList: Error listing user folders:', {
-            error: foldersError,
-            message: foldersError.message,
-            name: foldersError.name
-          })
-          throw foldersError
-        }
-
-        console.log('StorageFileList: Found user folders:', userFolders)
-
-        // For each upload folder, list its contents
-        const allFiles: Array<StorageFile> = []
-        for (const folder of userFolders) {
-          console.log('StorageFileList: Listing contents of folder:', folder.name)
-          const { data: folderFiles, error: folderError } = await supabase.storage
-            .from('bank-statements')
-            .list(`${authUser.id}/${folder.name}`)
-
-          if (folderError) {
-            console.error('StorageFileList: Error listing folder contents:', {
-              folder: folder.name,
-              error: folderError,
-              message: folderError.message,
-              name: folderError.name
-            })
-            continue // Skip this folder if there's an error
+        if (projectError) {
+          if (projectError.message.includes('permission denied') || projectError.message.includes('not found')) {
+            console.error('Project access error - this might be due to subscription/payment issues')
+            setError('Unable to access storage. Please check your Supabase subscription status.')
+            setLoading(false)
+            return
           }
-
-          console.log('StorageFileList: Found files in folder:', folder.name, folderFiles)
-
-          // Add files from this folder to our list
-          const pdfFiles = folderFiles
-            .filter(file => file.metadata.mimetype === 'application/pdf')
-            .map(file => ({
-              ...file,
-              name: `${folder.name}/${file.name}`, // Include the folder name in the file path
-              metadata: {
-                size: file.metadata.size,
-                mimetype: file.metadata.mimetype
-              },
-              created_at: new Date(file.created_at).toLocaleDateString(),
-              last_accessed_at: new Date(file.last_accessed_at).toLocaleDateString()
-            })) as Array<StorageFile>
-
-          allFiles.push(...pdfFiles)
+          throw projectError
         }
 
-        console.log('StorageFileList: All processed PDF files:', allFiles)
+        // Now try to access the bucket
+        const { data: bucketData, error: bucketError } = await supabase.storage
+          .getBucket('bank-statements')
+        
+        console.log('Bucket access check:', {
+          success: !bucketError,
+          error: bucketError,
+          bucketData
+        })
+
+        if (bucketError) {
+          if (bucketError.message.includes('not found')) {
+            console.error('Bucket not found - this might be due to subscription/payment issues')
+            setError('Storage bucket not found. Please check your Supabase subscription status.')
+            setLoading(false)
+            return
+          }
+          console.error('Cannot access bucket:', bucketError)
+          throw bucketError
+        }
+
+        // Now try to list files
+        console.log('Listing files in path:', `${authUser.id}/`)
+        const { data, error } = await supabase.storage
+          .from('bank-statements')
+          .list(`${authUser.id}/`, {
+            limit: 100,
+            offset: 0,
+            sortBy: { column: 'name', order: 'asc' },
+            search: ''
+          })
+
+        console.log('Raw storage response:', {
+          success: !error,
+          error,
+          data: JSON.stringify(data, null, 2)
+        })
+
+        if (error) {
+          console.error('Storage list error:', error)
+          throw error
+        }
+
+        if (!data) {
+          console.log('No data returned from storage')
+          setFiles([])
+          setLoading(false)
+          return
+        }
+
+        // Get all files recursively
+        const allFiles: Array<StorageFile> = []
+        console.log('Processing items:', data.length)
+        
+        for (const item of data) {
+          console.log('Processing item:', {
+            name: item.name,
+            id: item.id,
+            metadata: item.metadata,
+            created_at: item.created_at,
+            last_accessed_at: item.last_accessed_at,
+            updated_at: item.updated_at
+          })
+
+          if (!item.name.endsWith('/')) {
+            console.log('Adding file:', item.name)
+            allFiles.push(item as StorageFile)
+          } else {
+            const folderName = item.name.slice(0, -1)
+            console.log('Found folder:', folderName)
+            
+            const { data: folderData, error: folderError } = await supabase.storage
+              .from('bank-statements')
+              .list(`${authUser.id}/${folderName}/`)
+            
+            console.log('Folder contents:', {
+              folder: folderName,
+              success: !folderError,
+              error: folderError,
+              items: folderData?.length || 0
+            })
+
+            if (folderError) {
+              console.error('Error listing folder contents:', folderError)
+              continue
+            }
+
+            folderData.forEach(file => {
+              if (!file.name.endsWith('/')) {
+                console.log('Adding file from folder:', `${folderName}/${file.name}`)
+                allFiles.push({
+                  ...file,
+                  name: `${folderName}/${file.name}`
+                } as StorageFile)
+              }
+            })
+          }
+        }
+
+        console.log('Final file list:', {
+          totalFiles: allFiles.length,
+          files: allFiles.map(f => ({
+            name: f.name,
+            id: f.id,
+            created_at: f.created_at
+          }))
+        })
+
         setFiles(allFiles)
       } catch (err) {
-        console.error('StorageFileList: Error loading files:', {
-          error: err,
-          message: err instanceof Error ? err.message : 'Unknown error',
-          name: err instanceof Error ? err.name : 'Unknown',
-          stack: err instanceof Error ? err.stack : undefined
-        })
-        setError(err instanceof Error ? err.message : 'Failed to load files. Please try again.')
+        console.error('Error in fetchFiles:', err)
+        setError('Failed to load files')
       } finally {
         setLoading(false)
       }
     }
 
-    loadFiles()
-  }, [authUser, session, authLoading])
+    fetchFiles()
+  }, [authUser, authLoading])
 
   const handlePreview = async (fileName: string) => {
+    if (!authUser) {
+      console.error('No authenticated user found')
+      return
+    }
+
     try {
-      setError(null)
-      setSelectedFile(fileName)
+      console.log('Preview operation:')
+      console.log('- User ID:', authUser.id)
+      console.log('- File name from list:', fileName)
+      console.log('- Full path being used:', `${authUser.id}/${fileName}`)
 
-      const { data, error: urlError } = await supabase.storage
+      const { data, error } = await supabase.storage
         .from('bank-statements')
-        .createSignedUrl(`${authUser?.id}/${fileName}`, 3600) // fileName now includes the folder path
+        .createSignedUrl(`${authUser.id}/${fileName}`, 60)
 
-      if (urlError) throw urlError
+      if (error) {
+        console.error('Preview error details:', {
+          error,
+          message: error.message,
+          name: error.name
+        })
+        throw error
+      }
+
+      console.log('Preview URL generated successfully')
       setPreviewUrl(data.signedUrl)
+      setSelectedFile(fileName)
     } catch (err) {
       console.error('Error generating preview URL:', err)
-      setError('Failed to generate preview. Please try again.')
-      setSelectedFile(null)
+      setError('Failed to generate preview')
     }
   }
 
   const handleDownload = async (fileName: string) => {
+    if (!authUser) {
+      console.error('No authenticated user found')
+      return
+    }
+
     try {
-      setError(null)
-
-      const { data, error: downloadError } = await supabase.storage
+      console.log('Download file name:', fileName)
+      const { data, error } = await supabase.storage
         .from('bank-statements')
-        .download(`${authUser?.id}/${fileName}`) // fileName now includes the folder path
+        .download(`${authUser.id}/${fileName}`)
 
-      if (downloadError) throw downloadError
+      if (error) throw error
 
-      // Create a download link and trigger it
       const url = URL.createObjectURL(data)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = fileName.split('/').pop() || fileName // Use just the filename for download
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName.split('/').pop() || 'download'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch (err) {
       console.error('Error downloading file:', err)
-      setError('Failed to download file. Please try again.')
+      setError('Failed to download file')
     }
   }
 
-  const handleDelete = async (fileName: string) => {
-    if (!window.confirm('Are you sure you want to delete this file?')) return
+  const handleProcess = async (fileName: string) => {
+    if (!authUser) {
+      console.error('No authenticated user found')
+      return
+    }
 
     try {
+      setIsProcessing(true)
       setError(null)
+      setParsedContent(null)
+      setShowParseModal(true)
 
-      const { error: deleteError } = await supabase.storage
+      console.log('Process operation:')
+      console.log('- User ID:', authUser.id)
+      console.log('- File name from list:', fileName)
+      console.log('- Full path being used:', `${authUser.id}/${fileName}`)
+
+      const { data: pdfData, error: downloadError } = await supabase.storage
         .from('bank-statements')
-        .remove([`${authUser?.id}/${fileName}`]) // fileName now includes the folder path
+        .download(`${authUser.id}/${fileName}`)
 
-      if (deleteError) throw deleteError
+      if (downloadError) {
+        console.error('Process download error details:', {
+          error: downloadError,
+          message: downloadError.message,
+          name: downloadError.name
+        })
+        throw downloadError
+      }
 
-      // Remove the file from the local state
-      setFiles(files.filter(file => file.name !== fileName))
+      console.log('File downloaded successfully:', {
+        size: pdfData.size,
+        type: pdfData.type
+      })
+
+      // Create FormData and append the PDF file
+      const formData = new FormData()
+      const displayName = fileName.split('/').pop() || 'download.pdf'
+      formData.append('pdf', pdfData, displayName)
+      console.log('FormData created with file:', displayName)
+
+      // Send to our server for processing
+      console.log('Sending to server for processing...')
+      const response = await fetch('http://localhost:3001/api/parse-pdf', {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error('Server processing error:', errorData)
+        throw new Error(errorData.error || 'Failed to process PDF')
+      }
+
+      const result = await response.json()
+      console.log('PDF processed successfully:', {
+        numpages: result.data.numpages,
+        numrender: result.data.numrender,
+        info: result.data.info,
+        version: result.data.version
+      })
+
+      setParsedContent(result.data)
     } catch (err) {
-      console.error('Error deleting file:', err)
-      setError('Failed to delete file. Please try again.')
+      console.error('Error processing PDF:', err)
+      setError('Failed to process PDF. Please try again.')
+    } finally {
+      setIsProcessing(false)
     }
+  }
+
+  const handleCloseParseModal = () => {
+    setShowParseModal(false)
+    setParsedContent(null)
+    setError(null)
   }
 
   if (loading) {
-    return (
-      <div className="mt-8 p-4 bg-gray-50 rounded-lg">
-        <p className="text-gray-600">Loading files...</p>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="mt-8 p-4 bg-red-50 rounded-lg">
-        <p className="text-red-600">{error}</p>
-      </div>
-    )
-  }
-
-  if (files.length === 0) {
-    return (
-      <div className="mt-8 p-4 bg-gray-50 rounded-lg">
-        <p className="text-gray-600">No files uploaded yet.</p>
-      </div>
-    )
+    return <div className="mt-8">Loading files...</div>
   }
 
   return (
     <div className="mt-8">
       <h2 className="text-lg font-semibold mb-4">Your Bank Statements</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 text-red-600 rounded-lg">
+          {error}
+        </div>
+      )}
+
+      <div className="space-y-4">
         {files.map((file) => (
-          <div 
-            key={file.name} 
-            className="border rounded-lg p-4 bg-white hover:bg-gray-50 transition-colors"
+          <div
+            key={file.name}
+            className="flex items-center justify-between p-4 bg-white border rounded-lg hover:bg-gray-50"
           >
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
-                  {file.name}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Uploaded: {file.created_at}
-                </p>
-                <p className="text-xs text-gray-500">
-                  Size: {(file.metadata.size / 1024 / 1024).toFixed(2)} MB
+            <div className="flex items-center space-x-4">
+              <svg
+                className="h-8 w-8 text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                />
+              </svg>
+              <div>
+                <p className="font-medium">{file.name.split('/').pop()}</p>
+                <p className="text-sm text-gray-500">
+                  {new Date(file.created_at).toLocaleDateString()}
                 </p>
               </div>
-              <div className="ml-4 flex-shrink-0 flex space-x-2">
-                <button
-                  onClick={() => handlePreview(file.name)}
-                  className="text-sm text-blue-600 hover:text-blue-800"
-                >
-                  Preview
-                </button>
-                <button
-                  onClick={() => handleDownload(file.name)}
-                  className="text-sm text-green-600 hover:text-green-800"
-                >
-                  Download
-                </button>
-                <button
-                  onClick={() => handleDelete(file.name)}
-                  className="text-sm text-red-600 hover:text-red-800"
-                >
-                  Delete
-                </button>
-              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => handlePreview(file.name)}
+                className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+              >
+                Preview
+              </button>
+              <button
+                onClick={() => handleProcess(file.name)}
+                disabled={isProcessing}
+                className={`px-3 py-1 text-sm ${
+                  isProcessing
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                } rounded transition-colors`}
+              >
+                {isProcessing ? 'Processing...' : 'Process'}
+              </button>
+              <button
+                onClick={() => handleDownload(file.name)}
+                className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+              >
+                Download
+              </button>
             </div>
           </div>
         ))}
@@ -304,6 +426,15 @@ export function StorageFileList() {
           </div>
         </div>
       )}
+
+      {/* PDF Parse Modal */}
+      <PdfParseModal
+        isOpen={showParseModal}
+        onClose={handleCloseParseModal}
+        content={parsedContent?.text || null}
+        error={error}
+        isProcessing={isProcessing}
+      />
     </div>
   )
 } 

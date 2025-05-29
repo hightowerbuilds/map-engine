@@ -12,9 +12,6 @@ export default defineConfig({
       },
     },
   },
-  optimizeDeps: {
-    include: ['pdfjs-dist/build/pdf.worker.min.js'],
-  },
   server: {
     fs: {
       // Allow serving files from one level up to the project root

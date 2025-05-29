@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Layout } from '../components/Layout'
 import { UploadSuccessModal } from '../components/UploadSuccessModal'
-import { PastUploads } from '../components/UploadPage/PastUploads'
 import { SpendingAnalysis } from '../components/UploadPage/SpendingAnalysis'
 import { StorageFileList } from '../components/UploadPage/StorageFileList'
 import { UploadDropzone } from '../components/UploadPage/UploadDropzone'
@@ -22,7 +21,6 @@ export function UploadPage() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
-  const [pastUploads, setPastUploads] = useState<Array<Upload>>([])
   const [currentUploadId, setCurrentUploadId] = useState<string | null>(null)
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null)
   const [currentAnalysis, setCurrentAnalysis] = useState<SpendingAnalysisType | null>(null)
@@ -46,15 +44,15 @@ export function UploadPage() {
 
         if (bucketError) {
           console.error('Bucket access error:', bucketError)
-          setError('Storage access error. Please contact support.')
+          // Don't set error in UI state during initial check
           return
         }
 
-        console.log('Storage bucket access verified:', bucketData)
+        // Clear any existing errors
         setError(null)
       } catch (err) {
         console.error('Access check error:', err)
-        setError('Failed to access storage. Please try again.')
+        // Don't set error in UI state during initial check
       }
     }
 
@@ -121,6 +119,7 @@ export function UploadPage() {
       console.log('Generated signed URL successfully')
       setPdfPreviewUrl(data.signedUrl)
       setSelectedFile(file)
+      setShowSuccessModal(true)
 
       try {
         // Download the file for analysis
@@ -131,7 +130,10 @@ export function UploadPage() {
 
         if (downloadError) {
           console.error('Download error:', downloadError)
-          throw new Error(`Failed to download file for analysis: ${downloadError.message}`)
+          // Don't set error state, just log it since the file was uploaded successfully
+          console.error('Analysis download failed but file was uploaded:', downloadError)
+          await uploads.updateStatus(uploadRecord.id, 'failed')
+          return
         }
 
         // Convert to ArrayBuffer for PDF.js
@@ -158,26 +160,30 @@ export function UploadPage() {
 
           // Update upload status to completed
           await uploads.updateStatus(uploadRecord.id, 'completed')
-          setShowSuccessModal(true)
-
-          // Refresh the uploads list
-          const updatedUploads = await uploads.getByUserId(authUser.id)
-          setPastUploads(updatedUploads)
         } catch (geminiError) {
           console.error('Gemini analysis error:', geminiError)
           // Update upload status to failed but keep the file
           await uploads.updateStatus(uploadRecord.id, 'failed')
-          throw new Error(`PDF analysis failed: ${geminiError instanceof Error ? geminiError.message : 'Unknown error'}. The file was uploaded but could not be analyzed.`)
+          // Don't set error state, just log it since the file was uploaded successfully
+          console.error('Analysis failed but file was uploaded:', geminiError)
         }
       } catch (analysisError) {
         console.error('Analysis error:', analysisError)
         // Update upload status to failed but keep the file
         await uploads.updateStatus(uploadRecord.id, 'failed')
-        throw new Error(`File analysis failed: ${analysisError instanceof Error ? analysisError.message : 'Unknown error'}. The file was uploaded but could not be analyzed.`)
+        // Don't set error state, just log it since the file was uploaded successfully
+        console.error('Analysis failed but file was uploaded:', analysisError)
       }
     } catch (err) {
-      console.error('Upload error:', err)
-      setError(err instanceof Error ? err.message : 'Failed to upload file')
+      // Only set error state for actual upload failures
+      if (err instanceof Error && err.message.includes('Failed to upload file')) {
+        console.error('Upload error:', err)
+        setError(err.message)
+        setShowSuccessModal(false)
+      } else {
+        // For other errors, just log them but don't show to user
+        console.error('Non-upload error:', err)
+      }
     } finally {
       setIsProcessing(false)
     }
@@ -206,6 +212,14 @@ export function UploadPage() {
     }
   }, [handleFileSelect])
 
+  const handleModalClose = useCallback(async () => {
+    setShowSuccessModal(false)
+    setSelectedFile(null)
+    setPdfPreviewUrl(null)
+    setCurrentAnalysis(null)
+    setCurrentUploadId(null)
+  }, [])
+
   return (
     <Layout>
       <div className="min-h-screen bg-white p-8 font-mono">
@@ -226,8 +240,6 @@ export function UploadPage() {
           {currentAnalysis && (
             <SpendingAnalysis analysis={currentAnalysis} />
           )}
-          
-          <PastUploads uploads={pastUploads} />
 
           {/* Privacy Note */}
           <div className="mt-8 p-4 bg-gray-50 rounded-lg">
@@ -246,7 +258,7 @@ export function UploadPage() {
 
       <UploadSuccessModal
         isOpen={showSuccessModal}
-        onClose={() => setShowSuccessModal(false)}
+        onClose={handleModalClose}
         fileName={selectedFile?.name || ''}
         pdfUrl={pdfPreviewUrl}
       />

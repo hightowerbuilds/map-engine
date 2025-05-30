@@ -265,7 +265,7 @@ export function DashboardPage() {
           {/* Spending Locations */}
           <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Spending Locations</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Speeeending Locations</h2>
               <button
                 onClick={() => setShowAddModal(true)}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"

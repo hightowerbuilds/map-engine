@@ -49,15 +49,14 @@ export function UploadDropzone({
       </div>
       <p className="text-gray-600 mb-4">
         {isProcessing 
-          ? 'Processing PDF...' 
+          ? 'Processing file...' 
           : selectedFile 
             ? `Selected: ${selectedFile.name}`
-            : 'Drag and drop your bank statement here, or click to select a file'
+            : 'Drag and drop your file here, or click to select a file'
         }
       </p>
       <input
         type="file"
-        accept=".pdf"
         onChange={onFileSelect}
         className="hidden"
         id="file-input"
@@ -69,7 +68,7 @@ export function UploadDropzone({
         Select File
       </label>
       <p className="mt-2 text-sm text-gray-500">
-        Supported format: PDF (max 10MB)
+        Maximum file size: 10MB
       </p>
       {error && (
         <p className="mt-2 text-sm text-red-600">

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { PdfParseModal } from './PdfParseModal'
 import type { FileObject } from '@supabase/storage-js'
 
 interface StorageFile extends Omit<FileObject, 'metadata'> {
@@ -11,15 +10,6 @@ interface StorageFile extends Omit<FileObject, 'metadata'> {
   }
 }
 
-interface ParsedPdfData {
-  numpages: number
-  numrender: number
-  info: any
-  metadata: any
-  version: string
-  text: string
-}
-
 export function StorageFileList() {
   const { user: authUser, session, loading: authLoading } = useAuth()
   const [files, setFiles] = useState<Array<StorageFile>>([])
@@ -27,9 +17,6 @@ export function StorageFileList() {
   const [error, setError] = useState<string | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [parsedContent, setParsedContent] = useState<ParsedPdfData | null>(null)
-  const [showParseModal, setShowParseModal] = useState(false)
 
   useEffect(() => {
     if (authLoading) return
@@ -78,107 +65,23 @@ export function StorageFileList() {
         })
 
         if (bucketError) {
-          if (bucketError.message.includes('not found')) {
-            console.error('Bucket not found - this might be due to subscription/payment issues')
-            setError('Storage bucket not found. Please check your Supabase subscription status.')
-            setLoading(false)
-            return
-          }
-          console.error('Cannot access bucket:', bucketError)
           throw bucketError
         }
 
-        // Now try to list files
-        console.log('Listing files in path:', `${authUser.id}/`)
-        const { data, error } = await supabase.storage
+        // List files in the user's directory
+        const { data: filesData, error: filesError } = await supabase.storage
           .from('bank-statements')
-          .list(`${authUser.id}/`, {
-            limit: 100,
-            offset: 0,
-            sortBy: { column: 'name', order: 'asc' },
-            search: ''
-          })
+          .list(authUser.id)
 
-        console.log('Raw storage response:', {
-          success: !error,
-          error,
-          data: JSON.stringify(data, null, 2)
-        })
-
-        if (error) {
-          console.error('Storage list error:', error)
-          throw error
+        if (filesError) {
+          throw filesError
         }
 
-        if (!data) {
-          console.log('No data returned from storage')
-          setFiles([])
-          setLoading(false)
-          return
-        }
-
-        // Get all files recursively
-        const allFiles: Array<StorageFile> = []
-        console.log('Processing items:', data.length)
-        
-        for (const item of data) {
-          console.log('Processing item:', {
-            name: item.name,
-            id: item.id,
-            metadata: item.metadata,
-            created_at: item.created_at,
-            last_accessed_at: item.last_accessed_at,
-            updated_at: item.updated_at
-          })
-
-          if (!item.name.endsWith('/')) {
-            console.log('Adding file:', item.name)
-            allFiles.push(item as StorageFile)
-          } else {
-            const folderName = item.name.slice(0, -1)
-            console.log('Found folder:', folderName)
-            
-            const { data: folderData, error: folderError } = await supabase.storage
-              .from('bank-statements')
-              .list(`${authUser.id}/${folderName}/`)
-            
-            console.log('Folder contents:', {
-              folder: folderName,
-              success: !folderError,
-              error: folderError,
-              items: folderData?.length || 0
-            })
-
-            if (folderError) {
-              console.error('Error listing folder contents:', folderError)
-              continue
-            }
-
-            folderData.forEach(file => {
-              if (!file.name.endsWith('/')) {
-                console.log('Adding file from folder:', `${folderName}/${file.name}`)
-                allFiles.push({
-                  ...file,
-                  name: `${folderName}/${file.name}`
-                } as StorageFile)
-              }
-            })
-          }
-        }
-
-        console.log('Final file list:', {
-          totalFiles: allFiles.length,
-          files: allFiles.map(f => ({
-            name: f.name,
-            id: f.id,
-            created_at: f.created_at
-          }))
-        })
-
-        setFiles(allFiles)
+        console.log('Files fetched successfully:', filesData)
+        setFiles(filesData as Array<StorageFile>)
       } catch (err) {
-        console.error('Error in fetchFiles:', err)
-        setError('Failed to load files')
+        console.error('Error fetching files:', err)
+        setError('Failed to fetch files. Please try again.')
       } finally {
         setLoading(false)
       }
@@ -194,30 +97,21 @@ export function StorageFileList() {
     }
 
     try {
-      console.log('Preview operation:')
-      console.log('- User ID:', authUser.id)
-      console.log('- File name from list:', fileName)
-      console.log('- Full path being used:', `${authUser.id}/${fileName}`)
+      setError(null)
+      setSelectedFile(fileName)
 
-      const { data, error } = await supabase.storage
+      const { data, error: signedUrlError } = await supabase.storage
         .from('bank-statements')
-        .createSignedUrl(`${authUser.id}/${fileName}`, 60)
+        .createSignedUrl(`${authUser.id}/${fileName}`, 3600) // 1 hour expiry
 
-      if (error) {
-        console.error('Preview error details:', {
-          error,
-          message: error.message,
-          name: error.name
-        })
-        throw error
+      if (signedUrlError) {
+        throw signedUrlError
       }
 
-      console.log('Preview URL generated successfully')
       setPreviewUrl(data.signedUrl)
-      setSelectedFile(fileName)
     } catch (err) {
       console.error('Error generating preview URL:', err)
-      setError('Failed to generate preview')
+      setError('Failed to generate preview. Please try again.')
     }
   }
 
@@ -228,102 +122,29 @@ export function StorageFileList() {
     }
 
     try {
-      console.log('Download file name:', fileName)
-      const { data, error } = await supabase.storage
-        .from('bank-statements')
-        .download(`${authUser.id}/${fileName}`)
-
-      if (error) throw error
-
-      const url = URL.createObjectURL(data)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = fileName.split('/').pop() || 'download'
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    } catch (err) {
-      console.error('Error downloading file:', err)
-      setError('Failed to download file')
-    }
-  }
-
-  const handleProcess = async (fileName: string) => {
-    if (!authUser) {
-      console.error('No authenticated user found')
-      return
-    }
-
-    try {
-      setIsProcessing(true)
       setError(null)
-      setParsedContent(null)
-      setShowParseModal(true)
 
-      console.log('Process operation:')
-      console.log('- User ID:', authUser.id)
-      console.log('- File name from list:', fileName)
-      console.log('- Full path being used:', `${authUser.id}/${fileName}`)
-
-      const { data: pdfData, error: downloadError } = await supabase.storage
+      const { data, error: downloadError } = await supabase.storage
         .from('bank-statements')
         .download(`${authUser.id}/${fileName}`)
 
       if (downloadError) {
-        console.error('Process download error details:', {
-          error: downloadError,
-          message: downloadError.message,
-          name: downloadError.name
-        })
         throw downloadError
       }
 
-      console.log('File downloaded successfully:', {
-        size: pdfData.size,
-        type: pdfData.type
-      })
-
-      // Create FormData and append the PDF file
-      const formData = new FormData()
-      const displayName = fileName.split('/').pop() || 'download.pdf'
-      formData.append('pdf', pdfData, displayName)
-      console.log('FormData created with file:', displayName)
-
-      // Send to our server for processing
-      console.log('Sending to server for processing...')
-      const response = await fetch('http://localhost:3001/api/parse-pdf', {
-        method: 'POST',
-        body: formData
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error('Server processing error:', errorData)
-        throw new Error(errorData.error || 'Failed to process PDF')
-      }
-
-      const result = await response.json()
-      console.log('PDF processed successfully:', {
-        numpages: result.data.numpages,
-        numrender: result.data.numrender,
-        info: result.data.info,
-        version: result.data.version
-      })
-
-      setParsedContent(result.data)
+      // Create a download link and trigger it
+      const url = URL.createObjectURL(data)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName.split('/').pop() || 'download'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
     } catch (err) {
-      console.error('Error processing PDF:', err)
-      setError('Failed to process PDF. Please try again.')
-    } finally {
-      setIsProcessing(false)
+      console.error('Error downloading file:', err)
+      setError('Failed to download file. Please try again.')
     }
-  }
-
-  const handleCloseParseModal = () => {
-    setShowParseModal(false)
-    setParsedContent(null)
-    setError(null)
   }
 
   if (loading) {
@@ -375,17 +196,6 @@ export function StorageFileList() {
                 Preview
               </button>
               <button
-                onClick={() => handleProcess(file.name)}
-                disabled={isProcessing}
-                className={`px-3 py-1 text-sm ${
-                  isProcessing
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                } rounded transition-colors`}
-              >
-                {isProcessing ? 'Processing...' : 'Process'}
-              </button>
-              <button
                 onClick={() => handleDownload(file.name)}
                 className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
               >
@@ -420,21 +230,12 @@ export function StorageFileList() {
               <iframe
                 src={previewUrl}
                 className="w-full h-[80vh]"
-                title="PDF Preview"
+                title="File Preview"
               />
             </div>
           </div>
         </div>
       )}
-
-      {/* PDF Parse Modal */}
-      <PdfParseModal
-        isOpen={showParseModal}
-        onClose={handleCloseParseModal}
-        content={parsedContent?.text || null}
-        error={error}
-        isProcessing={isProcessing}
-      />
     </div>
   )
 } 

@@ -4,10 +4,10 @@ interface UploadSuccessModalProps {
   isOpen: boolean
   onClose: () => void
   fileName: string
-  pdfUrl: string | null
+  previewUrl: string | null
 }
 
-export function UploadSuccessModal({ isOpen, onClose, fileName, pdfUrl }: UploadSuccessModalProps) {
+export function UploadSuccessModal({ isOpen, onClose, fileName, previewUrl }: UploadSuccessModalProps) {
   if (!isOpen) return null
 
   return (
@@ -36,14 +36,14 @@ export function UploadSuccessModal({ isOpen, onClose, fileName, pdfUrl }: Upload
             {fileName} has been successfully uploaded.
           </p>
           
-          {pdfUrl && (
+          {previewUrl && (
             <div className="mb-6">
               <h4 className="text-sm font-medium text-gray-700 mb-2">Preview</h4>
               <div className="border rounded-lg overflow-hidden bg-gray-50">
                 <iframe
-                  src={pdfUrl}
+                  src={previewUrl}
                   className="w-full h-96"
-                  title="PDF Preview"
+                  title="File Preview"
                 />
               </div>
             </div>

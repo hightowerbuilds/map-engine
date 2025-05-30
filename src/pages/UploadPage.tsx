@@ -19,7 +19,7 @@ export function UploadPage() {
   const [error, setError] = useState<string | null>(null)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [currentUploadId, setCurrentUploadId] = useState<string | null>(null)
-  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
   // Handle authentication and storage access
   useEffect(() => {
@@ -65,11 +65,6 @@ export function UploadPage() {
       setIsProcessing(true)
       setError(null)
 
-      // Validate file type
-      if (!file.type.includes('pdf')) {
-        throw new Error('Only PDF files are supported')
-      }
-
       // Create upload record
       console.log('Creating upload record...')
       const uploadRecord = await uploads.create(authUser.id, file.name, file.size)
@@ -112,7 +107,7 @@ export function UploadPage() {
       }
 
       console.log('Generated signed URL successfully')
-      setPdfPreviewUrl(data.signedUrl)
+      setPreviewUrl(data.signedUrl)
       setSelectedFile(file)
       setShowSuccessModal(true)
 
@@ -158,7 +153,7 @@ export function UploadPage() {
   const handleModalClose = useCallback(() => {
     setShowSuccessModal(false)
     setSelectedFile(null)
-    setPdfPreviewUrl(null)
+    setPreviewUrl(null)
     setCurrentUploadId(null)
   }, [])
 
@@ -182,7 +177,7 @@ export function UploadPage() {
           {/* Privacy Note */}
           <div className="mt-8 p-4 bg-gray-50 rounded-lg">
             <p className="text-sm text-gray-600">
-              Your data privacy is our priority. All uploaded statements are stored securely 
+              Your data privacy is our priority. All uploaded files are stored securely 
               in your private storage bucket.
             </p>
           </div>
@@ -198,7 +193,7 @@ export function UploadPage() {
         isOpen={showSuccessModal}
         onClose={handleModalClose}
         fileName={selectedFile?.name || ''}
-        pdfUrl={pdfPreviewUrl}
+        previewUrl={previewUrl}
       />
     </Layout>
   )
